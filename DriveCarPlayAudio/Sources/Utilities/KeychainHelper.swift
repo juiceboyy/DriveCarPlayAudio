@@ -2,10 +2,13 @@ import Foundation
 import Security
 
 enum Keychain {
+    private static let service = Bundle.main.bundleIdentifier ?? "com.drivecarplayaudio"
+
     static func save(_ value: String, forKey key: String) {
         let data = Data(value.utf8)
         let query: [CFString: Any] = [
             kSecClass:       kSecClassGenericPassword,
+            kSecAttrService: service,
             kSecAttrAccount: key,
             kSecValueData:   data
         ]
@@ -16,6 +19,7 @@ enum Keychain {
     static func load(forKey key: String) -> String? {
         let query: [CFString: Any] = [
             kSecClass:            kSecClassGenericPassword,
+            kSecAttrService:      service,
             kSecAttrAccount:      key,
             kSecReturnData:       true,
             kSecMatchLimit:       kSecMatchLimitOne
@@ -29,6 +33,7 @@ enum Keychain {
     static func delete(forKey key: String) {
         let query: [CFString: Any] = [
             kSecClass:       kSecClassGenericPassword,
+            kSecAttrService: service,
             kSecAttrAccount: key
         ]
         SecItemDelete(query as CFDictionary)

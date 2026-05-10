@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import UIKit
 
 // MARK: - Config (fill in from Google Cloud Console)
 enum GoogleOAuthConfig {
@@ -115,13 +116,33 @@ final class GoogleAuthService: NSObject, ObservableObject {
         return try await postTokenRequest(params: params)
     }
 
+    // MARK: - Network helpers
+
+    /// Voert een URLRequest uit met max `maxAttempts` pogingen en exponential backoff.
+    private func fetchWithRetry(request: URLRequest, maxAttempts: Int = 3) async throws -> Data {
+        var lastError: Error?
+        for attempt in 0..<maxAttempts {
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+                return data
+            } catch {
+                lastError = error
+                if attempt < maxAttempts - 1 {
+                    let delay = pow(2.0, Double(attempt)) // 1s, 2s, 4s
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        throw lastError!
+    }
+
     private func postTokenRequest(params: [String: String]) async throws -> String {
         var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = params.map { "\($0.key)=\($0.value)" }.joined(separator: "&").data(using: .utf8)
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let data = try await fetchWithRetry(request: request)
         let resp = try JSONDecoder().decode(TokenResponse.self, from: data)
 
         accessToken  = resp.accessToken
